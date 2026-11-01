@@ -18,8 +18,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "function": {
             "name": "search_products",
             "description": (
-                "Busca produtos no catálogo com filtros opcionais. "
-                "Retorna availability (disponivel ou indisponivel), nunca a quantidade em estoque."
+                "Busca produtos no catálogo. A resposta traz products, matched_count e truncated. "
+                "Se truncated for true, a lista está incompleta: diga isso, informe quantos ficaram de fora "
+                "e ofereça o restante. Cada produto traz availability (disponivel ou indisponivel), "
+                "nunca a quantidade em estoque."
             ),
             "parameters": {
                 "type": "object",
@@ -28,7 +30,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "category_name": {"type": "string", "description": "Ex.: Violões, Guitarras"},
                     "max_price_brl": {"type": "number", "description": "Preço máximo (considera promo ativa)"},
                     "in_stock_only": {"type": "boolean", "default": False},
-                    "limit": {"type": "integer", "default": 10},
+                    "limit": {
+                        "type": "integer",
+                        "default": 25,
+                        "description": "Máximo de itens nesta página. Aumente se truncated for true.",
+                    },
                 },
             },
         },
@@ -54,14 +60,20 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "get_order_status",
-            "description": "Status e itens de um pedido pelo ID.",
+            "description": (
+                "Status, itens e rastreio de um pedido. Exige o e-mail do titular. "
+                "Sem o e-mail correspondente, não devolve status, rastreio, itens nem nome."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "order_id": {"type": "integer"},
-                    "customer_email": {"type": "string", "description": "Opcional, valida titularidade"},
+                    "customer_email": {
+                        "type": "string",
+                        "description": "E-mail do titular. Obrigatório para liberar os dados do pedido.",
+                    },
                 },
-                "required": ["order_id"],
+                "required": ["order_id", "customer_email"],
             },
         },
     },
@@ -105,6 +117,13 @@ def _without_stock_quantity(product: dict[str, Any]) -> dict[str, Any]:
 
 
 def _hide_stock_counts(result: Any) -> Any:
+    if isinstance(result, dict) and isinstance(result.get("products"), list):
+        public = dict(result)
+        public["products"] = [
+            _without_stock_quantity(item) if isinstance(item, dict) else item
+            for item in result["products"]
+        ]
+        return public
     if isinstance(result, list):
         return [_without_stock_quantity(item) if isinstance(item, dict) else item for item in result]
     if isinstance(result, dict) and "stock_quantity" in result:
@@ -122,7 +141,7 @@ def dispatch_tool(name: str, arguments: dict[str, Any]) -> str:
                 category_name=arguments.get("category_name"),
                 max_price_brl=arguments.get("max_price_brl"),
                 in_stock_only=bool(arguments.get("in_stock_only", False)),
-                limit=int(arguments.get("limit", 10)),
+                limit=int(arguments.get("limit", 25)),
             )
         elif name == "get_product_details":
             result = get_product_details(

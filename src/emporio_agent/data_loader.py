@@ -202,8 +202,9 @@ def search_products(
     category_name: str | None = None,
     max_price_brl: float | None = None,
     in_stock_only: bool = False,
-    limit: int = 15,
-) -> list[dict[str, Any]]:
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Return every match, then page it. `truncated` is true when the page is incomplete."""
     sql = """
         SELECT p.product_id, p.name, p.price_brl, p.stock_quantity, p.status,
                c.name AS category_name
@@ -225,16 +226,14 @@ def search_products(
     if in_stock_only:
         sql += " AND p.stock_quantity > 0"
 
-    sql += " ORDER BY p.name LIMIT ?"
-    params.append(limit * 3)
-
+    sql += " ORDER BY p.name"
     rows = conn.execute(sql, params).fetchall()
-    results: list[dict[str, Any]] = []
+    matched: list[dict[str, Any]] = []
     for row in rows:
         price = price_info_for_product(conn, row["product_id"], float(row["price_brl"]))
         if max_price_brl is not None and price.effective_price_brl > max_price_brl:
             continue
-        results.append(
+        matched.append(
             {
                 "product_id": row["product_id"],
                 "name": row["name"],
@@ -245,9 +244,16 @@ def search_products(
                 "promotion": price.promotion_description if price.has_active_promotion else None,
             }
         )
-        if len(results) >= limit:
-            break
-    return results
+
+    matched.sort(key=lambda item: (item["effective_price_brl"], item["name"]))
+    page_size = max(1, int(limit))
+    page = matched[:page_size]
+    return {
+        "products": page,
+        "matched_count": len(matched),
+        "returned_count": len(page),
+        "truncated": len(matched) > len(page),
+    }
 
 
 def get_product_details(
@@ -303,6 +309,12 @@ def get_order_status(
     order_id: int,
     customer_email: str | None = None,
 ) -> dict[str, Any] | None:
+    if not customer_email or not str(customer_email).strip():
+        return {
+            "error": "email_required",
+            "message": "Informe o e-mail do titular para consultar este pedido.",
+        }
+
     row = conn.execute(
         """
         SELECT o.*, cu.email, cu.name AS customer_name
@@ -315,7 +327,8 @@ def get_order_status(
     if not row:
         return None
 
-    if customer_email and row["email"].lower() != customer_email.strip().lower():
+    stored_email = (row["email"] or "").lower()
+    if stored_email != customer_email.strip().lower():
         return {"error": "email_mismatch", "message": "E-mail não confere com o pedido informado."}
 
     items = conn.execute(
