@@ -81,10 +81,21 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "list_customer_orders",
-            "description": "Lista pedidos de um cliente pelo e-mail.",
+            "description": (
+                "Histórico de pedidos de um cliente, só pelo e-mail do titular. "
+                "Use quando o cliente informar o e-mail e quiser ver os pedidos, mesmo sem o número. "
+                "A resposta traz found, order_count e orders (número, data, status, total, pagamento, "
+                "rastreio, previsão e itens). Se found for false, diga que não há pedido para esse e-mail. "
+                "Nunca afirme que não há pedido sem chamar esta ferramenta."
+            ),
             "parameters": {
                 "type": "object",
-                "properties": {"email": {"type": "string"}},
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "description": "E-mail do titular cadastrado na compra.",
+                    }
+                },
                 "required": ["email"],
             },
         },
@@ -160,7 +171,8 @@ def dispatch_tool(name: str, arguments: dict[str, Any]) -> str:
             if result is None:
                 result = {"error": "not_found", "message": "Pedido não encontrado."}
         elif name == "list_customer_orders":
-            result = list_customer_orders(conn, email=str(arguments["email"]))
+            email = arguments.get("email") or arguments.get("customer_email") or ""
+            result = list_customer_orders(conn, email=str(email))
         elif name == "search_store_policies":
             result = search_policies(
                 query=str(arguments["query"]),

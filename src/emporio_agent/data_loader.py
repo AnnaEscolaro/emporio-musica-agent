@@ -304,6 +304,22 @@ def get_product_details(
     }
 
 
+def _order_items(conn: sqlite3.Connection, order_id: int) -> list[dict[str, Any]]:
+    items = conn.execute(
+        """
+        SELECT oi.quantity, oi.product_id, p.name
+        FROM order_items oi
+        JOIN products p ON p.product_id = oi.product_id
+        WHERE oi.order_id = ?
+        """,
+        (order_id,),
+    ).fetchall()
+    return [
+        {"product_id": i["product_id"], "name": i["name"], "quantity": i["quantity"]}
+        for i in items
+    ]
+
+
 def get_order_status(
     conn: sqlite3.Connection,
     order_id: int,
@@ -327,19 +343,9 @@ def get_order_status(
     if not row:
         return None
 
-    stored_email = (row["email"] or "").lower()
+    stored_email = (row["email"] or "").strip().lower()
     if stored_email != customer_email.strip().lower():
         return {"error": "email_mismatch", "message": "E-mail não confere com o pedido informado."}
-
-    items = conn.execute(
-        """
-        SELECT oi.quantity, oi.product_id, p.name
-        FROM order_items oi
-        JOIN products p ON p.product_id = oi.product_id
-        WHERE oi.order_id = ?
-        """,
-        (order_id,),
-    ).fetchall()
 
     return {
         "order_id": row["order_id"],
@@ -351,30 +357,61 @@ def get_order_status(
         "estimated_delivery": row["estimated_delivery"],
         "notes": row["notes"],
         "customer_name": row["customer_name"],
-        "items": [
-            {"product_id": i["product_id"], "name": i["name"], "quantity": i["quantity"]}
-            for i in items
-        ],
+        "items": _order_items(conn, order_id),
     }
 
 
-def list_customer_orders(conn: sqlite3.Connection, email: str) -> list[dict[str, Any]]:
+def list_customer_orders(conn: sqlite3.Connection, email: str) -> dict[str, Any]:
+    """Histórico do titular. O e-mail é a chave; sem ele não há consulta."""
+    if not email or not str(email).strip():
+        return {
+            "error": "email_required",
+            "found": False,
+            "orders": [],
+            "message": "Informe o e-mail do titular para listar os pedidos.",
+        }
+
+    normalized = email.strip()
     rows = conn.execute(
         """
-        SELECT o.order_id, o.order_date, o.status, o.total_brl
+        SELECT o.order_id, o.order_date, o.status, o.total_brl,
+               o.payment_method, o.tracking_code, o.estimated_delivery, o.notes,
+               cu.name AS customer_name
         FROM orders o
         JOIN customers cu ON cu.customer_id = o.customer_id
-        WHERE LOWER(cu.email) = LOWER(?)
+        WHERE LOWER(TRIM(cu.email)) = LOWER(TRIM(?))
         ORDER BY o.order_date DESC
         """,
-        (email.strip(),),
+        (normalized,),
     ).fetchall()
-    return [
+
+    orders = [
         {
             "order_id": r["order_id"],
             "order_date": r["order_date"],
             "status": r["status"],
             "total_brl": r["total_brl"],
+            "payment_method": r["payment_method"],
+            "tracking_code": r["tracking_code"],
+            "estimated_delivery": r["estimated_delivery"],
+            "notes": r["notes"],
+            "customer_name": r["customer_name"],
+            "items": _order_items(conn, r["order_id"]),
         }
         for r in rows
     ]
+    if not orders:
+        return {
+            "email": normalized,
+            "found": False,
+            "order_count": 0,
+            "orders": [],
+            "message": "Nenhum pedido encontrado para este e-mail.",
+        }
+    return {
+        "email": normalized,
+        "found": True,
+        "order_count": len(orders),
+        "orders": orders,
+        "message": f"{len(orders)} pedido(s) encontrado(s) para este e-mail.",
+    }

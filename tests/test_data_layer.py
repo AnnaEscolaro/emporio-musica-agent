@@ -1,6 +1,12 @@
 import json
 
-from emporio_agent.data_loader import get_connection, get_order_status, ingest_csvs, search_products
+from emporio_agent.data_loader import (
+    get_connection,
+    get_order_status,
+    ingest_csvs,
+    list_customer_orders,
+    search_products,
+)
 from emporio_agent.promotions import compute_effective_price
 from emporio_agent.tools import dispatch_tool
 
@@ -111,3 +117,40 @@ def test_tool_hides_order_until_email_matches():
     )
     assert revealed["status"] == "shipped"
     assert revealed["tracking_code"] == "BRJL5544332BR"
+
+
+def test_list_customer_orders_by_email():
+    ingest_csvs()
+    conn = get_connection()
+    try:
+        lucas = list_customer_orders(conn, "  Lucas.Mendes@jmail.com ")
+        assert lucas["found"] is True
+        assert lucas["order_count"] == 1
+        assert lucas["orders"][0]["order_id"] == 4
+        assert lucas["orders"][0]["status"] == "delivered"
+        assert lucas["orders"][0]["total_brl"] == 799.9
+        assert lucas["orders"][0]["items"][0]["name"] == "Giannini GF-3D Dreadnought Sunburst"
+
+        ana = list_customer_orders(conn, ORDER_8_EMAIL)
+        assert ana["orders"][0]["order_id"] == 8
+        assert ana["orders"][0]["tracking_code"] == "BRJL5544332BR"
+        assert ana["orders"][0]["items"][0]["name"] == "Kala KA-C Concert Mogno"
+
+        pedro = list_customer_orders(conn, "pedro.oliveira@jmail.com")
+        assert pedro["order_count"] == 2
+        assert [order["order_id"] for order in pedro["orders"]] == [19, 1]
+
+        missing = list_customer_orders(conn, "anna@teste.com")
+        assert missing["found"] is False
+        assert missing["orders"] == []
+
+        blank = list_customer_orders(conn, "  ")
+        assert blank["error"] == "email_required"
+    finally:
+        conn.close()
+
+    via_alias = json.loads(
+        dispatch_tool("list_customer_orders", {"customer_email": "lucas.mendes@jmail.com"})
+    )
+    assert via_alias["found"] is True
+    assert via_alias["orders"][0]["order_id"] == 4
