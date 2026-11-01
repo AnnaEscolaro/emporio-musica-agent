@@ -11,7 +11,7 @@ Agente conversacional em **Python** para o desafio técnico **AI Engineer (Artef
 ## Configuração
 
 ```powershell
-cd C:\Users\annae\Documents\emporio-musica-agent
+cd emporio-musica-agent
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
@@ -94,7 +94,3 @@ Transcrições em [`examples/conversations/`](examples/conversations/) — inclu
 ## Uso de assistentes de IA no desenvolvimento
 
 Este projeto foi estruturado com apoio do **Cursor** (planejamento, geração de boilerplate, revisão de edge cases). O fluxo foi: leitura do enunciado/PDF → desenho híbrido tools+RAG → implementação incremental → testes manuais das ferramentas → documentação. Decisões de negócio (promoções, privacidade) foram explicitadas no código e neste README.
-
-## Licença
-
-Projeto de desafio técnico — uso educacional/avaliativo.
