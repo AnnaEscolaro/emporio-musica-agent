@@ -17,7 +17,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "search_products",
-            "description": "Busca produtos no catálogo com filtros opcionais.",
+            "description": (
+                "Busca produtos no catálogo com filtros opcionais. "
+                "Retorna availability (disponivel ou indisponivel), nunca a quantidade em estoque."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -34,7 +37,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "get_product_details",
-            "description": "Detalhes de um produto por ID ou nome aproximado.",
+            "description": (
+                "Detalhes de um produto por ID ou nome aproximado. "
+                "Retorna availability (disponivel ou indisponivel), nunca a quantidade em estoque."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -89,6 +95,23 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 ]
 
 
+def _without_stock_quantity(product: dict[str, Any]) -> dict[str, Any]:
+    """O modelo só vê disponibilidade, nunca o número de unidades."""
+    public = dict(product)
+    quantity = public.pop("stock_quantity", None)
+    if quantity is not None:
+        public["availability"] = "disponivel" if int(quantity) > 0 else "indisponivel"
+    return public
+
+
+def _hide_stock_counts(result: Any) -> Any:
+    if isinstance(result, list):
+        return [_without_stock_quantity(item) if isinstance(item, dict) else item for item in result]
+    if isinstance(result, dict) and "stock_quantity" in result:
+        return _without_stock_quantity(result)
+    return result
+
+
 def dispatch_tool(name: str, arguments: dict[str, Any]) -> str:
     conn = get_connection()
     try:
@@ -126,6 +149,8 @@ def dispatch_tool(name: str, arguments: dict[str, Any]) -> str:
             )
         else:
             result = {"error": "unknown_tool", "message": f"Ferramenta desconhecida: {name}"}
+        if name in {"search_products", "get_product_details"}:
+            result = _hide_stock_counts(result)
     finally:
         conn.close()
 

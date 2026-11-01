@@ -4,7 +4,7 @@
 
 **Assistente:** O **Takamine GD20 Dreadnought Natural** (código 95) está por **R$ 2.199,00** (preço de tabela). No momento **não há promoção ativa** para este item.
 
-- **Estoque:** 5 unidades disponíveis  
+- **Disponibilidade:** disponível no momento  
 - **Tipo:** violão dreadnought com tampo sólido em cedro, cordas de aço  
 - **Categoria:** Violões  
 

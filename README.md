@@ -73,6 +73,7 @@ Comandos na sessão:
 - **OpenAI chat completions + tools:** loop simples, compatível com entrevista técnica.
 - **Promoções:** se houver várias ativas para o mesmo produto, aplica-se o **maior `discount_percent`**.
 - **Privacidade de pedidos:** recomenda-se informar `order_id`; se o cliente passar e-mail, usa-se `customer_email` para conferir titularidade.
+- **Estoque:** as ferramentas de catálogo devolvem só `availability` (`disponivel` ou `indisponivel`). A quantidade de cada produto não chega ao modelo nem deve aparecer na resposta.
 
 ## Limitações e próximos passos
 
