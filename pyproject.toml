@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emporio-musica-agent"
+version = "0.1.0"
+description = "Agente de atendimento — Empório da Música (desafio Artefact AI Engineer)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.40.0",
+    "python-dotenv>=1.0.0",
+    "pypdf>=4.0.0",
+    "chromadb>=0.5.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+emporio-agent = "emporio_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

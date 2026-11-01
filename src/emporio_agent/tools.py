@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from emporio_agent.data_loader import (
+    get_connection,
+    get_order_status,
+    get_product_details,
+    list_customer_orders,
+    search_products,
+)
+from emporio_agent.policies_rag import search_policies
+
+TOOL_DEFINITIONS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_products",
+            "description": "Busca produtos no catálogo com filtros opcionais.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Termo no nome ou descrição"},
+                    "category_name": {"type": "string", "description": "Ex.: Violões, Guitarras"},
+                    "max_price_brl": {"type": "number", "description": "Preço máximo (considera promo ativa)"},
+                    "in_stock_only": {"type": "boolean", "default": False},
+                    "limit": {"type": "integer", "default": 10},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_product_details",
+            "description": "Detalhes de um produto por ID ou nome aproximado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_id": {"type": "integer"},
+                    "name_query": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_order_status",
+            "description": "Status e itens de um pedido pelo ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_id": {"type": "integer"},
+                    "customer_email": {"type": "string", "description": "Opcional, valida titularidade"},
+                },
+                "required": ["order_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_customer_orders",
+            "description": "Lista pedidos de um cliente pelo e-mail.",
+            "parameters": {
+                "type": "object",
+                "properties": {"email": {"type": "string"}},
+                "required": ["email"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_store_policies",
+            "description": "Busca trechos do manual de políticas (horários, endereço, trocas, pagamento, frete).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "top_k": {"type": "integer", "default": 4},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
+
+
+def dispatch_tool(name: str, arguments: dict[str, Any]) -> str:
+    conn = get_connection()
+    try:
+        if name == "search_products":
+            result = search_products(
+                conn,
+                query=arguments.get("query"),
+                category_name=arguments.get("category_name"),
+                max_price_brl=arguments.get("max_price_brl"),
+                in_stock_only=bool(arguments.get("in_stock_only", False)),
+                limit=int(arguments.get("limit", 10)),
+            )
+        elif name == "get_product_details":
+            result = get_product_details(
+                conn,
+                product_id=arguments.get("product_id"),
+                name_query=arguments.get("name_query"),
+            )
+            if result is None:
+                result = {"error": "not_found", "message": "Produto não encontrado."}
+        elif name == "get_order_status":
+            result = get_order_status(
+                conn,
+                order_id=int(arguments["order_id"]),
+                customer_email=arguments.get("customer_email"),
+            )
+            if result is None:
+                result = {"error": "not_found", "message": "Pedido não encontrado."}
+        elif name == "list_customer_orders":
+            result = list_customer_orders(conn, email=str(arguments["email"]))
+        elif name == "search_store_policies":
+            result = search_policies(
+                query=str(arguments["query"]),
+                top_k=int(arguments.get("top_k", 4)),
+            )
+        else:
+            result = {"error": "unknown_tool", "message": f"Ferramenta desconhecida: {name}"}
+    finally:
+        conn.close()
+
+    return json.dumps(result, ensure_ascii=False)
